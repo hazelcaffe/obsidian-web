@@ -15,6 +15,7 @@ import {
 import { performRequest, type RequestUrlParams } from "../net/request.ts";
 import { getVfs } from "../vfs-instance.ts";
 import { BrowserWindowShim } from "./browser-window.ts";
+import { dialog } from "./dialog.ts";
 import { type IpcMainEvent, ipcMain } from "./ipc.ts";
 import { Menu, type MenuItemOptions } from "./menu.ts";
 import { checkForUpdates, getUpdateState, setUpdatesDisabled } from "./updater.ts";
@@ -644,7 +645,7 @@ export function registerMainHandlers(): void {
 		}
 	});
 	on("open-file", (event, extensions: string[]) => {
-		void import("./dialog.ts").then(async ({ dialog }) => {
+		void (async () => {
 			const win = senderWindow(event);
 			const result = await dialog.showOpenDialog({
 				properties: ["openFile"],
@@ -659,7 +660,7 @@ export function registerMainHandlers(): void {
 					target.OBS_OPEN_FILE = path;
 				}
 			}
-		});
+		})();
 	});
 
 	on("context-menu", (event) => {
