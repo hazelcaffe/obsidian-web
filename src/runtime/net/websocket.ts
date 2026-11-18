@@ -1,6 +1,8 @@
 import { electronUserAgent, getCurl, needsProxy } from "./curl.ts";
 
 interface CurlWebSocketHandle {
+	connected: boolean;
+	cleanup(error?: number): void;
 	onopen: () => void;
 	onmessage: (data: string | Uint8Array) => void;
 	onclose: () => void;
@@ -71,6 +73,15 @@ class CurlBackedWebSocket extends EventTarget {
 					socket.onmessage = (data) => this.#onMessage(data);
 					socket.onclose = () => this.#finish(this.#closeCode, this.#closeReason, true);
 					socket.onerror = () => this.#fail();
+					// libcurl.js ignores errors that happen before the socket is connected.
+					const cleanup = socket.cleanup.bind(socket);
+					socket.cleanup = (code = 0) => {
+						const connected = socket.connected;
+						cleanup(code);
+						if (!connected && code) {
+							this.#fail();
+						}
+					};
 				} catch (error) {
 					console.error(error);
 					this.#fail();

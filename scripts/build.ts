@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFile, cp, mkdir, readdir, readFile, rm } from "node:fs/promises";
+import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type BuildOptions, build, context } from "esbuild";
@@ -31,7 +31,12 @@ const common: BuildOptions = {
 	legalComments: "linked",
 	logLevel: "info",
 	external: ["/obsidian-web/*"],
-	alias: { stream: "readable-stream", path: "path-browserify", querystring: "querystring-es3", zlib: "browserify-zlib" },
+	alias: {
+		stream: "readable-stream",
+		path: "path-browserify",
+		querystring: "querystring-es3",
+		zlib: "browserify-zlib",
+	},
 	define: { "process.env.NODE_DEBUG": "false" },
 };
 
@@ -42,9 +47,15 @@ async function copyStatic(): Promise<void> {
 		await cp(join(root, "public", entry), target, { recursive: true });
 	}
 	const libcurl = join(root, "node_modules/libcurl.js");
-	for (const file of ["libcurl.mjs", "libcurl.wasm", "LICENSE"]) {
-		await copyFile(join(libcurl, file), join(assets, "vendor", file === "LICENSE" ? "libcurl.LICENSE" : file));
+	await copyFile(join(libcurl, "libcurl.wasm"), join(assets, "vendor/libcurl.wasm"));
+	await copyFile(join(libcurl, "LICENSE"), join(assets, "vendor/libcurl.LICENSE"));
+	// Emscripten treats any page with `process.versions.node` as Node.js, which the runtime emulates.
+	const source = await readFile(join(libcurl, "libcurl.mjs"), "utf8");
+	const detection = /var ENVIRONMENT_IS_NODE=typeof process=="object"[^;]*;/;
+	if (!detection.test(source)) {
+		throw new Error("Unable to patch the environment detection of libcurl.js");
 	}
+	await writeFile(join(assets, "vendor/libcurl.mjs"), source.replace(detection, "var ENVIRONMENT_IS_NODE=false;"));
 }
 
 async function buildId(): Promise<string> {
