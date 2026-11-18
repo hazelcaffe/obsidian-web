@@ -9,6 +9,7 @@ import { checkForUpdates, setUpdatesDisabled } from "./electron/updater.ts";
 import { currentVaultId, DESKTOP, DOCUMENTS, DOWNLOADS, HOME, pageName, TEMP, USER_DATA } from "./env.ts";
 import { setAppVersion } from "./net/curl.ts";
 import { registerNodeModules } from "./node/index.ts";
+import { enhanceStarter } from "./starter.ts";
 import { setVfs } from "./vfs-instance.ts";
 import { prepareWindow } from "./windows.ts";
 
@@ -112,6 +113,8 @@ registerMainHandlers();
 prepareWindow(window, false);
 if (pageName() === "index.html") {
 	onAppCreated(window, applyWebDefaults);
+} else if (pageName() === "starter.html") {
+	enhanceStarter(window);
 }
 
 initialize().then(() => notifyWorker({ type: "runtime-ready" }), showFatalError);

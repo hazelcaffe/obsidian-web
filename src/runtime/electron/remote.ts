@@ -5,6 +5,7 @@ import { getOpenedApp } from "../app-info.ts";
 import { APP_PATH, DESKTOP, DOCUMENTS, DOWNLOADS, EXEC_PATH, HOME, TEMP, USER_DATA } from "../env.ts";
 import { curlFetch } from "../net/curl.ts";
 import { loadModule } from "../node/registry.ts";
+import { revealItem } from "../vault-transfer.ts";
 import { BrowserWindowShim, getWindowShim, webContentsModule } from "./browser-window.ts";
 import { remoteClipboard } from "./clipboard.ts";
 import { dialog } from "./dialog.ts";
@@ -341,7 +342,9 @@ export const shell = {
 	openExternal: async (url: string): Promise<void> => openExternal(url),
 	openPath: async (path: string): Promise<string> => openPath(path),
 	showItemInFolder: (path: string): void => {
-		console.info(`[obsidian-web] ${path} is stored in the browser's origin private file system.`);
+		revealItem(window, path).catch((error: unknown) =>
+			console.error("[obsidian-web] Unable to export", path, error),
+		);
 	},
 	trashItem: async (path: string): Promise<void> => {
 		if (!trashItem(path)) {
