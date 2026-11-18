@@ -24,6 +24,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.6.8",
+		"@noble/ciphers": "^2.4.0",
 		"@noble/hashes": "^2.4.0",
 		"@types/node": "^24.19.2",
 		"assert": "^2.1.0",

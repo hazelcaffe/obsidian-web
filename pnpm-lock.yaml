@@ -173,6 +173,9 @@ importers:
       '@biomejs/biome':
         specifier: ^2.6.8
         version: 2.6.8
+      '@noble/ciphers':
+        specifier: ^2.4.0
+        version: 2.4.0
       '@noble/hashes':
         specifier: ^2.4.0
         version: 2.4.0
@@ -449,6 +452,10 @@ packages:
   '@mercuryworkshop/wisp-js@0.5.3':
     resolution: {integrity: sha512-kEvnBt57x0g39HPatsYWXXboDYx79/eQxuGD2Ym9c5+LFGbKZa2Hbv6neBhwhlS23u73Y6ZTFqb2VVJNUoejGg==}
     hasBin: true
+
+  '@noble/ciphers@2.4.0':
+    resolution: {integrity: sha512-AnjFn0Jv92laAkvMrghlFZq4qQCIN/4DxFV/eooqtC2YTjB7kBeLMS2T9KJX4Dn+ZVXLOwK0lSgqDtx9gvxtiw==}
+    engines: {node: '>= 20.19.0'}
 
   '@noble/hashes@2.4.0':
     resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
@@ -948,6 +955,8 @@ snapshots:
       ws: 8.23.0(bufferutil@4.2.0)
     transitivePeerDependencies:
       - utf-8-validate
+
+  '@noble/ciphers@2.4.0': {}
 
   '@noble/hashes@2.4.0': {}
 
