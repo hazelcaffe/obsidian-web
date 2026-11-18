@@ -31,8 +31,8 @@ and it is stored in the browser's private storage.
 
 ## Quick start
 
-Requirements: Node.js 24 or newer, pnpm, and a Chromium-based browser (Chrome, Edge, Brave...). Firefox and Safari
-may work but are not tested.
+Requirements: Node.js 24 or newer, pnpm, and a recent Chromium-based browser (Chrome, Edge, Brave...) or Firefox.
+Safari may work but is not tested.
 
 ```sh
 pnpm install
@@ -52,15 +52,15 @@ pnpm start -- --host 0.0.0.0 --cert cert.pem --key key.pem
 
 ### Server options
 
-| Option | Default | Description |
-| --- | --- | --- |
-| `--host <host>` | `127.0.0.1` (env `HOST`) | Interface to listen on |
-| `-p, --port <port>` | `8080` (env `PORT`) | Port to listen on |
-| `--cert <file>`, `--key <file>` | | Serve over HTTPS |
-| `--allow-private` | only on localhost | Let the proxy reach private and loopback addresses (local services, LAN servers) |
-| `--no-wisp` | | Do not run the Wisp proxy (use an external one) |
-| `--trust-proxy` | | Trust `X-Forwarded-*` headers from a reverse proxy |
-| `-v, --verbose` | | Log proxy connections |
+| Option                          | Default                  | Description                                                                      |
+| ------------------------------- | ------------------------ | -------------------------------------------------------------------------------- |
+| `--host <host>`                 | `127.0.0.1` (env `HOST`) | Interface to listen on                                                           |
+| `-p, --port <port>`             | `8080` (env `PORT`)      | Port to listen on                                                                |
+| `--cert <file>`, `--key <file>` |                          | Serve over HTTPS                                                                 |
+| `--allow-private`               | only on localhost        | Let the proxy reach private and loopback addresses (local services, LAN servers) |
+| `--no-wisp`                     |                          | Do not run the Wisp proxy (use an external one)                                  |
+| `--trust-proxy`                 |                          | Trust `X-Forwarded-*` headers from a reverse proxy                               |
+| `-v, --verbose`                 |                          | Log proxy connections                                                            |
 
 ### Static hosting
 
@@ -72,12 +72,12 @@ the origin. Without the bundled server you need a Wisp server for network access
 
 - **Your data** lives in the origin private file system of the browser profile. Ask the browser to keep it
   persistently from the setup page (`/?setup`), and keep backups: clearing site data deletes your vaults.
-- **Importing**: on the vault picker, *Import vault* copies a folder or ZIP archive from your computer. Files can also
+- **Importing**: on the vault picker, _Import vault_ copies a folder or ZIP archive from your computer. Files can also
   be dropped into a vault.
-- **Exporting**: *Reveal in system explorer* (file explorer context menu, vault picker menu) downloads the file, or
+- **Exporting**: _Reveal in system explorer_ (file explorer context menu, vault picker menu) downloads the file, or
   the folder as a ZIP archive. Files saved by the app (PDF and image exports) are downloaded too.
-- **Settings** open inside the page. To get Obsidian's separate settings window, turn on *Open settings in a separate
-  window* in the app settings.
+- **Settings** open inside the page. To get Obsidian's separate settings window, turn on _Open settings in a separate
+  window_ in the app settings.
 
 ## Limitations
 
@@ -86,7 +86,7 @@ the origin. Without the bundled server you need a Wisp server for network access
 - Browsers reserve some shortcuts such as <kbd>Ctrl</kbd>+<kbd>W</kbd>, <kbd>Ctrl</kbd>+<kbd>T</kbd> and
   <kbd>Ctrl</kbd>+<kbd>N</kbd>; they act on the browser tab instead of Obsidian.
 - The web viewer uses iframes, so sites that forbid being framed do not load in it.
-- *Export to PDF* opens the browser's print dialog, and screenshots of the canvas viewport are not available.
+- _Export to PDF_ opens the browser's print dialog, and screenshots of the canvas viewport are not available.
 - System fonts are listed only if the browser grants access to local fonts.
 - Windows paths are not emulated: on Windows the app runs as if on Linux.
 - `safeStorage` (used for secrets) encrypts with a key kept in the same browser storage, which hides secrets from

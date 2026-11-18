@@ -73,7 +73,8 @@ async function ensureServiceWorker(): Promise<boolean> {
 		location.reload();
 		return false;
 	}
-	await navigator.storage.persist?.().catch(() => false);
+	// Firefox asks the user, so this must not block startup.
+	void navigator.storage.persist?.().catch(() => false);
 	return true;
 }
 

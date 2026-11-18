@@ -72,7 +72,17 @@ export async function curlFetch(url: string, init: LibcurlRequestInit = {}): Pro
 	headers.forEach((value, key) => {
 		plain[key] = value;
 	});
-	return (await getSession()).fetch(url, { ...init, headers: plain });
+	const session = await getSession();
+	const method = (init.method ?? "GET").toUpperCase();
+	try {
+		return await session.fetch(url, { ...init, headers: plain });
+	} catch (error) {
+		// The first request over a fresh Wisp connection occasionally fails; retrying is safe for reads.
+		if ((method !== "GET" && method !== "HEAD") || init.signal?.aborted) {
+			throw error;
+		}
+		return session.fetch(url, { ...init, headers: plain });
+	}
 }
 
 /** Whether a URL must be fetched through the proxy (an http(s) URL on another origin). */
