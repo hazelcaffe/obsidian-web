@@ -102,9 +102,25 @@ export function isNavigating(win: Window): boolean {
 	return navigating.has(win);
 }
 
+/** Navigates once pending writes are in OPFS, so that the next page mounts an up to date file system. */
 function navigate(win: Window, url: string): void {
 	navigating.add(win);
-	win.location.assign(url);
+	getVfs()
+		.flush()
+		.catch((error: unknown) => console.error(error))
+		.finally(() => win.location.assign(url));
+}
+
+function openTab(win: Window, url: string, name: string): void {
+	const tab = win.open("about:blank", name);
+	if (!tab) {
+		navigate(win, url);
+		return;
+	}
+	getVfs()
+		.flush()
+		.catch((error: unknown) => console.error(error))
+		.finally(() => tab.location.replace(url));
 }
 
 function vaultUrl(id: string): string {
@@ -142,10 +158,7 @@ export function openVault(path: string, sender: Window): true | string {
 		return true;
 	}
 	if (isAppStarted(win)) {
-		const opened = win.open(vaultUrl(id), `vault-${id}`);
-		if (!opened) {
-			navigate(win, vaultUrl(id));
-		}
+		openTab(win, vaultUrl(id), `vault-${id}`);
 	} else {
 		navigate(win, vaultUrl(id));
 	}
@@ -155,7 +168,7 @@ export function openVault(path: string, sender: Window): true | string {
 export function openStarter(sender: Window): void {
 	const win = rootWindow(sender);
 	if (isAppStarted(win)) {
-		win.open("/starter.html", "obsidian-starter");
+		openTab(win, "/starter.html", "obsidian-starter");
 	} else {
 		navigate(win, "/starter.html");
 	}
@@ -420,7 +433,10 @@ export function registerMainHandlers(): void {
 		if (getUpdateState().status === "update-downloaded") {
 			navigator.serviceWorker.controller?.postMessage({ type: "app-updated" });
 		}
-		setTimeout(() => rootWindow(senderWindow(event)).location.reload(), 50);
+		const win = rootWindow(senderWindow(event));
+		void getVfs()
+			.flush()
+			.finally(() => win.location.reload());
 	});
 
 	on("update", (event) => set(event, getUpdateState().status));
