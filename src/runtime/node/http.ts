@@ -312,8 +312,12 @@ export class ClientRequest extends Writable {
 				if (this.aborted) {
 					return;
 				}
-				const err = error instanceof Error ? error : new Error(String(error));
-				this.emit("error", Object.assign(err, { code: (err as { code?: string }).code ?? "ECONNRESET" }));
+				const message = error instanceof Error ? error.message : String(error);
+				const code =
+					typeof (error as { code?: unknown })?.code === "string"
+						? (error as { code: string }).code
+						: "ECONNRESET";
+				this.emit("error", Object.assign(new Error(message, { cause: error }), { code }));
 			},
 		);
 	}
