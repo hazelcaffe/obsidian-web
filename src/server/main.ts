@@ -10,6 +10,8 @@ import { parseArgs } from "node:util";
 import { logging, server as wisp } from "@mercuryworkshop/wisp-js/server";
 
 const { values: args } = parseArgs({
+	// `pnpm start -- --port 80` forwards the separator too.
+	args: process.argv.slice(2).filter((arg, index) => index !== 0 || arg !== "--"),
 	options: {
 		host: { type: "string", default: process.env.HOST ?? "127.0.0.1" },
 		port: { type: "string", short: "p", default: process.env.PORT ?? "8080" },

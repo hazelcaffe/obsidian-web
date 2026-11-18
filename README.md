@@ -47,7 +47,7 @@ Browsers only allow service workers and OPFS in secure contexts, so use `localho
 other devices, give the server a certificate:
 
 ```sh
-pnpm start -- --host 0.0.0.0 --cert cert.pem --key key.pem
+pnpm start --host 0.0.0.0 --cert cert.pem --key key.pem
 ```
 
 ### Server options
