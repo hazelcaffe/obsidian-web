@@ -7,6 +7,7 @@ import { pageName } from "./env.ts";
 import { installGlobals } from "./globals.ts";
 import { installFetch } from "./net/fetch.ts";
 import { installWebSocket } from "./net/websocket.ts";
+import { proxyPopupResources } from "./popup-resources.ts";
 
 type AppWindow = Window & typeof globalThis;
 
@@ -32,6 +33,9 @@ export function prepareWindow(win: AppWindow, isPopup: boolean): void {
 	trackContextMenu(win);
 	getWindowShim(win, isPopup);
 	patchOpen(win);
+	if (isPopup) {
+		proxyPopupResources(win);
+	}
 }
 
 /**
