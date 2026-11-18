@@ -1,6 +1,7 @@
 import type { ClientMessage, WorkerMessage } from "../shared/constants.ts";
 import { getOpfsRoot, OPFS_VFS_DIR, openInstalledApp, VFS_META_FILE } from "../shared/install.ts";
 import { createFs } from "../vfs/index.ts";
+import { applyWebDefaults, onAppCreated } from "./app-hooks.ts";
 import { setOpenedApp } from "./app-info.ts";
 import { watchDownloads } from "./downloads.ts";
 import { applyIcon, readConfig, registerMainHandlers, takePendingVaultMessage } from "./electron/main.ts";
@@ -109,5 +110,8 @@ async function initialize(): Promise<void> {
 registerNodeModules();
 registerMainHandlers();
 prepareWindow(window, false);
+if (pageName() === "index.html") {
+	onAppCreated(window, applyWebDefaults);
+}
 
 initialize().then(() => notifyWorker({ type: "runtime-ready" }), showFatalError);

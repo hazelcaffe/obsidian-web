@@ -157,7 +157,7 @@ export function openVault(path: string, sender: Window): true | string {
 		win.focus();
 		return true;
 	}
-	if (isAppStarted(win)) {
+	if (isAppStarted(win) || pageName(win) === "help.html") {
 		openTab(win, vaultUrl(id), `vault-${id}`);
 	} else {
 		navigate(win, vaultUrl(id));

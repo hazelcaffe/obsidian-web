@@ -410,12 +410,26 @@ export const powerSaveBlocker = {
 	isStarted: (id: number): boolean => powerSaveBlockers.has(id),
 };
 
+const NOT_METHODS = new Set([
+	"then",
+	"toJSON",
+	"constructor",
+	"prototype",
+	"valueOf",
+	"toString",
+	"inspect",
+	"nodeType",
+	"$$typeof",
+	"length",
+	"name",
+]);
+
 function unsupported(name: string) {
 	return new Proxy(
 		{},
 		{
 			get(_target, property) {
-				if (property === "then" || typeof property === "symbol") {
+				if (typeof property === "symbol" || NOT_METHODS.has(property)) {
 					return undefined;
 				}
 				return () => {
