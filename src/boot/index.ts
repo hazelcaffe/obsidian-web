@@ -46,7 +46,10 @@ function formatBytes(bytes: number): string {
 	if (bytes < 1024 * 1024) {
 		return `${(bytes / 1024).toFixed(0)} KB`;
 	}
-	return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+	if (bytes < 1024 ** 3) {
+		return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+	}
+	return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
 
 async function ensureServiceWorker(): Promise<boolean> {
@@ -247,15 +250,40 @@ function renderSetup(installed: InstalledApp | null): void {
 		]),
 	);
 
+	const storageText = el("p", { cls: "muted", textContent: "Checking storage…" });
+	const persistButton = el("button", {
+		textContent: "Keep data persistently",
+		hidden: true,
+		onclick: async () => {
+			await navigator.storage.persist().catch(() => false);
+			void updateStorage();
+		},
+	});
+	const updateStorage = async (): Promise<void> => {
+		const [persisted, estimate] = await Promise.all([
+			navigator.storage.persisted().catch(() => false),
+			navigator.storage.estimate().catch(() => ({ usage: 0, quota: 0 })),
+		]);
+		storageText.textContent = `${formatBytes(estimate.usage ?? 0)} used of ${formatBytes(estimate.quota ?? 0)}. ${
+			persisted
+				? "Storage is persistent."
+				: "Storage is not persistent yet: the browser may clear it when space runs low. Export important vaults or use Sync."
+		}`;
+		persistButton.hidden = persisted;
+	};
+	void updateStorage();
+
 	if (installed) {
 		contentEl.append(
 			el("div", { cls: "card" }, [
 				el("h2", { textContent: "Storage" }),
+				storageText,
 				el("p", {
 					cls: "muted",
-					textContent: `Installed from ${installed.source} on ${new Date(installed.installedAt).toLocaleString()}.`,
+					textContent: `Obsidian was installed from ${installed.source} on ${new Date(installed.installedAt).toLocaleString()}.`,
 				}),
 				el("div", { cls: "row" }, [
+					persistButton,
 					el("button", {
 						textContent: "Remove app files",
 						onclick: async () => {

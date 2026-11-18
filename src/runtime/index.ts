@@ -80,6 +80,7 @@ async function initialize(): Promise<void> {
 				(!!vaultPath && (path === vaultPath || path.startsWith(`${vaultPath}/`)))),
 	});
 	setVfs(vfs);
+	addEventListener("pagehide", () => void vfs.flush());
 	for (const dir of [HOME, DOCUMENTS, DESKTOP, DOWNLOADS, USER_DATA, TEMP]) {
 		vfs.fs.mkdirSync(dir, { recursive: true });
 	}
