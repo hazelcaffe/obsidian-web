@@ -7,6 +7,7 @@ import {
 } from "../../shared/libcurl.ts";
 
 const COOKIE_KEY = "obsidian-web:cookies";
+const nativeFetch = globalThis.fetch.bind(globalThis);
 
 interface HttpSession {
 	fetch(input: string, init?: LibcurlRequestInit): Promise<LibcurlResponse>;
@@ -58,6 +59,9 @@ async function getSession(): Promise<HttpSession> {
 
 /** Performs an HTTP request through libcurl.js and the Wisp proxy. Not subject to CORS. */
 export async function curlFetch(url: string, init: LibcurlRequestInit = {}): Promise<LibcurlResponse> {
+	if (!getWispUrl()) {
+		return nativeFetch(url, init);
+	}
 	const headers = new Headers(init.headers);
 	if (!headers.has("User-Agent")) {
 		headers.set("User-Agent", electronUserAgent());
@@ -87,6 +91,10 @@ export async function curlFetch(url: string, init: LibcurlRequestInit = {}): Pro
 
 /** Whether a URL must be fetched through the proxy (an http(s) URL on another origin). */
 export function needsProxy(url: string | URL, base: string = location.href): boolean {
+	const wisp = getWispUrl();
+	if (!wisp) {
+		return false;
+	}
 	let parsed: URL;
 	try {
 		parsed = new URL(url, base);
@@ -104,6 +112,5 @@ export function needsProxy(url: string | URL, base: string = location.href): boo
 	if (parsed.host === location.host) {
 		return false;
 	}
-	const wisp = getWispUrl();
 	return !parsed.href.startsWith(wisp);
 }

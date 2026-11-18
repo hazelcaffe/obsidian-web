@@ -1,36 +1,17 @@
-import {
-	APP_PAGES,
-	ASSET_PREFIX,
-	type ClientMessage,
-	VFS_URL_PREFIX,
-	type WorkerMessage,
-} from "../shared/constants.ts";
-import { getOpfsRoot, OPFS_VFS_DIR, type OpenedApp, openInstalledApp } from "../shared/install.ts";
+import { type ClientMessage, VFS_URL_PREFIX, type WorkerMessage } from "../shared/constants.ts";
 import { mimeType } from "../shared/mime.ts";
+import { getOpfsRoot, OPFS_VFS_DIR } from "../shared/storage.ts";
 
 declare const self: ServiceWorkerGlobalScope;
 declare const __BUILD_ID__: string;
 declare const __PRECACHE__: string[];
 
 const CACHE_NAME = `obsidian-web-${__BUILD_ID__}`;
-const READY_TIMEOUT = 60_000;
 const CLIENT_READ_TIMEOUT = 5_000;
 
-let appPromise: Promise<OpenedApp | null> | null = null;
 const readyClients = new Set<string>();
-const readyWaiters = new Map<string, Array<() => void>>();
 const pendingReads = new Map<number, (data: ArrayBuffer | null) => void>();
 let nextReadId = 1;
-
-function getApp(): Promise<OpenedApp | null> {
-	appPromise ??= openInstalledApp().then((app) => {
-		if (!app) {
-			appPromise = null;
-		}
-		return app;
-	});
-	return appPromise;
-}
 
 self.addEventListener("install", (event) => {
 	event.waitUntil(
@@ -60,12 +41,6 @@ self.addEventListener("message", (event) => {
 	const source = event.source;
 	if (data.type === "runtime-ready" && source && "id" in source) {
 		readyClients.add(source.id);
-		for (const resolve of readyWaiters.get(source.id) ?? []) {
-			resolve();
-		}
-		readyWaiters.delete(source.id);
-	} else if (data.type === "app-updated") {
-		appPromise = null;
 	} else if (data.type === "vfs-read-result") {
 		pendingReads.get(data.id)?.(data.data);
 		pendingReads.delete(data.id);
@@ -81,12 +56,8 @@ self.addEventListener("fetch", (event) => {
 	const path = url.pathname;
 	if (path.startsWith(VFS_URL_PREFIX)) {
 		event.respondWith(serveVfs(request, path, event.clientId));
-	} else if (path.startsWith(ASSET_PREFIX) || path === "/sw.js") {
-		event.respondWith(networkFirst(request));
-	} else if (path === "/") {
-		event.respondWith(serveBoot(request));
 	} else {
-		event.respondWith(serveApp(request, path, event.clientId || event.resultingClientId));
+		event.respondWith(networkFirst(request));
 	}
 });
 
@@ -105,62 +76,6 @@ async function networkFirst(request: Request): Promise<Response> {
 		}
 		throw error;
 	}
-}
-
-function serveBoot(request: Request): Promise<Response> {
-	return networkFirst(new Request(new URL("/", request.url), { headers: request.headers }));
-}
-
-async function serveApp(request: Request, path: string, clientId: string): Promise<Response> {
-	const app = await getApp();
-	if (!app) {
-		if (path in APP_PAGES) {
-			return Response.redirect("/", 302);
-		}
-		return fetch(request);
-	}
-	const relative = decodeURIComponent(path.slice(1));
-	const location = app.archive.locate(relative);
-	if (!location) {
-		return fetch(request).catch(() => new Response("Not found", { status: 404 }));
-	}
-	const blob = app.file.slice(location.start, location.start + location.size);
-	const headers: Record<string, string> = { "Content-Type": mimeType(relative), "Cache-Control": "no-cache" };
-	if (path in APP_PAGES) {
-		return new Response(injectRuntime(await blob.text()), { headers });
-	}
-	if (Object.values(APP_PAGES).includes(path) && clientId) {
-		await waitForRuntime(clientId);
-	}
-	return rangeResponse(request, blob, headers);
-}
-
-function injectRuntime(html: string): string {
-	const tag = `<script src="${ASSET_PREFIX}runtime.js"></script>`;
-	const charset = /<meta\s+charset=[^>]*>/i.exec(html);
-	if (charset) {
-		const end = charset.index + charset[0].length;
-		return `${html.slice(0, end)}\n${tag}${html.slice(end)}`;
-	}
-	return html.replace(/<head[^>]*>/i, (head) => `${head}\n${tag}`);
-}
-
-function waitForRuntime(clientId: string): Promise<void> {
-	if (readyClients.has(clientId)) {
-		return Promise.resolve();
-	}
-	const promise = new Promise<void>((resolve) => {
-		const waiters = readyWaiters.get(clientId) ?? [];
-		waiters.push(resolve);
-		readyWaiters.set(clientId, waiters);
-		setTimeout(resolve, READY_TIMEOUT);
-	});
-	// The worker may have been restarted since the page reported that it is ready.
-	self.clients.get(clientId).then((client) => {
-		const message: WorkerMessage = { type: "ready-check" };
-		client?.postMessage(message);
-	});
-	return promise;
 }
 
 function rangeResponse(request: Request, blob: Blob, headers: Record<string, string>): Response {

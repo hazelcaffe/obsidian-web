@@ -11,7 +11,6 @@ export const APP_PAGES: Record<string, string> = {
 
 export type ClientMessage =
 	| { type: "runtime-ready" }
-	| { type: "app-updated" }
 	| { type: "vfs-read-result"; id: number; data: ArrayBuffer | null };
 
-export type WorkerMessage = { type: "vfs-read"; id: number; path: string } | { type: "ready-check" };
+export type WorkerMessage = { type: "vfs-read"; id: number; path: string };

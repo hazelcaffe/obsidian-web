@@ -34,6 +34,7 @@ export function onAppCreated(win: Window, callback: (app: ObsidianApp) => void):
 }
 
 export function applyWebDefaults(app: ObsidianApp): void {
+	observeSettings(app as Parameters<typeof observeSettings>[0]);
 	const vault = app.vault;
 	if (!vault) {
 		return;
@@ -42,3 +43,5 @@ export function applyWebDefaults(app: ObsidianApp): void {
 	vault.getConfig = (key: string): unknown =>
 		Object.hasOwn(WEB_DEFAULTS, key) && vault.config?.[key] === undefined ? WEB_DEFAULTS[key] : getConfig(key);
 }
+
+import { observeSettings } from "./settings.ts";

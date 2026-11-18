@@ -58,7 +58,7 @@ class App extends EventEmitter {
 	accessibilitySupportEnabled = false;
 
 	getVersion(): string {
-		return getOpenedApp().info.version;
+		return getOpenedApp().version;
 	}
 
 	getName(): string {

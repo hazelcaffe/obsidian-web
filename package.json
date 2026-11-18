@@ -9,9 +9,6 @@
 	"engines": {
 		"node": ">=24"
 	},
-	"bin": {
-		"obsidian-web": "./src/server/main.ts"
-	},
 	"scripts": {
 		"build": "node scripts/build.ts",
 		"watch": "node scripts/build.ts --watch",

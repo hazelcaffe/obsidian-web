@@ -1,14 +1,14 @@
-import type { OpenedApp } from "../shared/install.ts";
+import type { BundleInfo } from "../shared/bundle.ts";
 
-let opened: OpenedApp | null = null;
+let opened: BundleInfo | null = null;
 
-export function setOpenedApp(app: OpenedApp): void {
+export function setOpenedApp(app: BundleInfo): void {
 	opened = app;
 }
 
-export function getOpenedApp(): OpenedApp {
+export function getOpenedApp(): BundleInfo {
 	if (!opened) {
-		throw new Error("Obsidian is not installed");
+		throw new Error("The Obsidian bundle has not loaded");
 	}
 	return opened;
 }

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { AsarArchive } from "../../src/shared/asar.ts";
-import { extractTerms } from "../../src/shared/install.ts";
+import { AsarArchive, extractTerms } from "../../src/shared/asar.ts";
 
 interface Tree {
 	[name: string]: string | Tree;

@@ -3,19 +3,19 @@ import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/p
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type BuildOptions, build, context } from "esbuild";
+import { bundleObsidian } from "./obsidian.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const out = join(root, "dist/public");
+const out = join(root, "dist");
 const assets = join(out, "obsidian-web");
 const watch = process.argv.includes("--watch");
 const production = !watch && !process.argv.includes("--dev");
 
 const PRECACHE = [
 	"/",
-	"/obsidian-web/boot.js",
-	"/obsidian-web/boot.css",
 	"/obsidian-web/runtime.js",
-	"/obsidian-web/icon.svg",
+	"/favicon.ico",
+	"/obsidian-web/app.json",
 	"/obsidian-web/manifest.webmanifest",
 	"/obsidian-web/vendor/libcurl.mjs",
 	"/obsidian-web/vendor/libcurl.wasm",
@@ -60,7 +60,7 @@ async function copyStatic(): Promise<void> {
 
 async function buildId(): Promise<string> {
 	const hash = createHash("sha256");
-	for (const file of ["runtime.js", "boot.js", "boot.css"]) {
+	for (const file of ["runtime.js", "app.json"]) {
 		hash.update(await readFile(join(assets, file)));
 	}
 	return hash.digest("hex").slice(0, 16);
@@ -83,13 +83,13 @@ const pages: BuildOptions = {
 	...common,
 	entryPoints: {
 		runtime: join(root, "src/runtime/index.ts"),
-		boot: join(root, "src/boot/index.ts"),
 	},
 	outdir: assets,
 };
 
 await rm(out, { recursive: true, force: true });
 await copyStatic();
+PRECACHE.push(...(await bundleObsidian(root, out)));
 
 if (watch) {
 	const ctx = await context({

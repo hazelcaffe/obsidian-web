@@ -18,7 +18,6 @@ import { BrowserWindowShim } from "./browser-window.ts";
 import { dialog } from "./dialog.ts";
 import { type IpcMainEvent, ipcMain } from "./ipc.ts";
 import { Menu, type MenuItemOptions } from "./menu.ts";
-import { checkForUpdates, getUpdateState, setUpdatesDisabled } from "./updater.ts";
 
 interface VaultEntry {
 	path: string;
@@ -338,17 +337,17 @@ export function trashItem(path: string): boolean {
 
 async function openSandbox(sender: Window): Promise<void> {
 	const fs = getVfs().fs;
-	const { archive, file } = getOpenedApp();
+	const { sandbox } = getOpenedApp();
 	await fs.promises.rm(SANDBOX_VAULT, { recursive: true, force: true });
 	await fs.promises.mkdir(SANDBOX_VAULT, { recursive: true });
-	for (const relative of archive.walk("sandbox")) {
-		const location = archive.locate(relative);
-		if (!location || relative.endsWith(".DS_Store")) {
-			continue;
-		}
+	for (const relative of sandbox) {
 		const destination = `${SANDBOX_VAULT}/${relative.slice("sandbox/".length)}`;
 		await fs.promises.mkdir(pathModule.dirname(destination), { recursive: true });
-		const data = new Uint8Array(await file.slice(location.start, location.start + location.size).arrayBuffer());
+		const response = await fetch(`/${relative.split("/").map(encodeURIComponent).join("/")}`);
+		if (!response.ok) {
+			throw new Error(`Unable to load ${relative}`);
+		}
+		const data = new Uint8Array(await response.arrayBuffer());
 		await fs.promises.writeFile(destination, data);
 	}
 	openVault(SANDBOX_VAULT, sender);
@@ -403,8 +402,8 @@ function set<T>(event: IpcMainEvent, value: T): void {
 export function registerMainHandlers(): void {
 	const on = ipcMain.on;
 
-	on("version", (event) => set(event, getOpenedApp().info.version));
-	on("terms", (event) => set(event, getOpenedApp().info.terms));
+	on("version", (event) => set(event, getOpenedApp().version));
+	on("terms", (event) => set(event, getOpenedApp().terms));
 	on("policy", (event) => set(event, DEFAULT_POLICY));
 	on("file-url", (event) => set(event, `${location.origin}${VFS_URL_PREFIX}`));
 	on("resources", (event) => set(event, "/opt/obsidian/resources/obsidian.asar"));
@@ -431,36 +430,17 @@ export function registerMainHandlers(): void {
 
 	on("relaunch", (event) => {
 		set(event, "");
-		if (getUpdateState().status === "update-downloaded") {
-			navigator.serviceWorker.controller?.postMessage({ type: "app-updated" });
-		}
 		const win = rootWindow(senderWindow(event));
 		void getVfs()
 			.flush()
 			.finally(() => win.location.reload());
 	});
 
-	on("update", (event) => set(event, getUpdateState().status));
-	on("latest-public-version", (event) => set(event, getUpdateState().latestVersion));
-	on("check-update", (event, force: boolean) => {
-		if (force) {
-			void checkForUpdates(true);
-		}
-		set(event, getUpdateState().checking);
-	});
-	on("disable-update", (event, value: boolean | null) => {
-		const config = readConfig();
-		if (value === true || value === false) {
-			if (value) {
-				config.updateDisabled = true;
-			} else {
-				delete config.updateDisabled;
-			}
-			writeConfig(config);
-			setUpdatesDisabled(value);
-		}
-		set(event, !!config.updateDisabled);
-	});
+	// Obsidian is part of the static build; updates are applied by rebuilding dist/.
+	on("update", (event) => set(event, ""));
+	on("latest-public-version", (event) => set(event, getOpenedApp().version));
+	on("check-update", (event) => set(event, false));
+	on("disable-update", (event) => set(event, true));
 	on("insider-build", (event) => set(event, false));
 	on("cli", (event) => set(event, false));
 	on("copy-asar", (event) => set(event, false));
@@ -725,7 +705,7 @@ export function registerMainHandlers(): void {
 }
 
 export function applyIcon(win: Window): void {
-	let url = "/obsidian-web/icon.svg";
+	let url = "/favicon.ico";
 	try {
 		url = (JSON.parse(win.localStorage.getItem(ICON_KEY) ?? "null") as { url?: string } | null)?.url ?? url;
 	} catch {}

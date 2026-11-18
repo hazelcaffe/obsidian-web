@@ -1,4 +1,7 @@
 import { ASSET_PREFIX } from "./constants.ts";
+import { getWispUrl } from "./network-config.ts";
+
+export { getWispUrl } from "./network-config.ts";
 
 export interface LibcurlResponse extends Response {
 	raw_headers?: Array<[string, string]>;
@@ -58,32 +61,13 @@ export interface Libcurl {
 	logger: (type: string, text: string) => void;
 }
 
-const WISP_KEY = "obsidian-web:wisp-url";
-
-export function defaultWispUrl(): string {
-	return `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/wisp/`;
-}
-
-export function getWispUrl(): string {
-	try {
-		return localStorage.getItem(WISP_KEY) || defaultWispUrl();
-	} catch {
-		return defaultWispUrl();
-	}
-}
-
-export function setWispUrl(url: string | null): void {
-	if (url) {
-		localStorage.setItem(WISP_KEY, url.endsWith("/") ? url : `${url}/`);
-	} else {
-		localStorage.removeItem(WISP_KEY);
-	}
-}
-
 let loading: Promise<Libcurl> | null = null;
 
 /** Loads libcurl.js lazily. It is kept as a separate (LGPL) file instead of being bundled. */
 export function loadLibcurl(): Promise<Libcurl> {
+	if (!getWispUrl()) {
+		return Promise.reject(new Error("This feature needs a Wisp proxy. Configure it in Settings → Obsidian Web."));
+	}
 	loading ??= (async () => {
 		const url = `${ASSET_PREFIX}vendor/libcurl.mjs`;
 		const module = (await import(/* @vite-ignore */ url)) as { libcurl: Libcurl };

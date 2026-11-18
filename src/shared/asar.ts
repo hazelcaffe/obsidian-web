@@ -15,6 +15,12 @@ export interface AsarLinkEntry {
 
 export type AsarEntry = AsarFileEntry | AsarDirectoryEntry | AsarLinkEntry;
 
+/** The bundle's main and renderer processes compare this notice through the `terms` IPC call. */
+export function extractTerms(mainJs: string): string | null {
+	const match = /"(I understand and agree[^"\\]*(?:\\.[^"\\]*)*)"/.exec(mainJs);
+	return match?.[1] ? (JSON.parse(`"${match[1]}"`) as string) : null;
+}
+
 export interface AsarFileLocation {
 	start: number;
 	size: number;

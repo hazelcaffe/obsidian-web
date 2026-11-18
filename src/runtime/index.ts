@@ -1,11 +1,12 @@
+import { BUNDLE_INFO_URL, BUNDLE_MARKER, type BundleInfo } from "../shared/bundle.ts";
 import type { ClientMessage, WorkerMessage } from "../shared/constants.ts";
-import { getOpfsRoot, OPFS_VFS_DIR, openInstalledApp, VFS_META_FILE } from "../shared/install.ts";
+import { getOpfsRoot, OPFS_VFS_DIR, VFS_META_FILE } from "../shared/storage.ts";
+import { LAST_VAULT_KEY } from "../shared/storage-keys.ts";
 import { createFs } from "../vfs/index.ts";
 import { applyWebDefaults, onAppCreated } from "./app-hooks.ts";
 import { setOpenedApp } from "./app-info.ts";
 import { watchDownloads } from "./downloads.ts";
-import { applyIcon, readConfig, registerMainHandlers, takePendingVaultMessage } from "./electron/main.ts";
-import { checkForUpdates, setUpdatesDisabled } from "./electron/updater.ts";
+import { applyIcon, registerMainHandlers, takePendingVaultMessage } from "./electron/main.ts";
 import { currentVaultId, DESKTOP, DOCUMENTS, DOWNLOADS, HOME, pageName, TEMP, USER_DATA } from "./env.ts";
 import { setAppVersion } from "./net/curl.ts";
 import { registerNodeModules } from "./node/index.ts";
@@ -44,7 +45,7 @@ function showFatalError(error: unknown): void {
 		box.style.cssText =
 			"position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#1e1e1e;color:#ddd;font:14px system-ui;padding:24px;";
 		const message = error instanceof Error ? error.message : String(error);
-		box.innerHTML = `<div style="max-width:560px"><h2>Obsidian Web failed to start</h2><p></p><p><a href="/?setup" style="color:#a88bfa">Open setup</a> · <a href="" style="color:#a88bfa">Reload</a></p></div>`;
+		box.innerHTML = `<div style="max-width:560px"><h2>Obsidian Web failed to start</h2><p></p><p><a href="" style="color:#a88bfa">Reload</a></p></div>`;
 		(box.querySelector("p") as HTMLElement).textContent = message;
 		document.body.appendChild(box);
 	};
@@ -55,18 +56,60 @@ function showFatalError(error: unknown): void {
 	}
 }
 
+async function ensureServiceWorker(): Promise<boolean> {
+	if (!navigator.serviceWorker || !navigator.storage?.getDirectory) {
+		throw new Error("This browser needs OPFS and service workers. Open the site on localhost or over HTTPS.");
+	}
+	const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" });
+	const legacyPage = !document.querySelector(`meta[name="${BUNDLE_MARKER}"]`);
+	if (legacyPage) {
+		await registration.update();
+	}
+	const installing = registration.installing ?? registration.waiting;
+	if (installing && installing.state !== "activated") {
+		await new Promise<void>((resolve, reject) => {
+			installing.addEventListener("statechange", () => {
+				if (installing.state === "activated") {
+					resolve();
+				} else if (installing.state === "redundant") {
+					reject(new Error("Service worker installation failed"));
+				}
+			});
+		});
+	}
+	await navigator.serviceWorker.ready;
+	if (!navigator.serviceWorker.controller) {
+		await new Promise<void>((resolve) => {
+			navigator.serviceWorker.addEventListener("controllerchange", () => resolve(), { once: true });
+		});
+	}
+	if (legacyPage) {
+		location.reload();
+		return false;
+	}
+	return true;
+}
+
 async function initialize(): Promise<void> {
-	const opened = await openInstalledApp();
-	if (!opened) {
-		location.replace("/");
-		await new Promise(() => undefined);
+	if (!(await ensureServiceWorker())) {
 		return;
 	}
+	const response = await fetch(BUNDLE_INFO_URL);
+	if (!response.ok) {
+		throw new Error("Missing bundled app metadata. Run pnpm build to regenerate dist/.");
+	}
+	const opened = (await response.json()) as BundleInfo;
 	setOpenedApp(opened);
-	setAppVersion(opened.info.version);
+	setAppVersion(opened.version);
 
 	const opfs = await getOpfsRoot();
 	const vfsRoot = await opfs.getDirectoryHandle(OPFS_VFS_DIR, { create: true });
+	if (pageName() === "index.html" && !currentVaultId()) {
+		const last = localStorage.getItem(LAST_VAULT_KEY);
+		const path = await readVaultPath(vfsRoot, last);
+		location.replace(path && last ? `/index.html?vault=${encodeURIComponent(last)}` : "/starter.html");
+		return;
+	}
 	const vaultPath = await readVaultPath(vfsRoot, currentVaultId());
 	const vfs = await createFs({
 		root: vfsRoot,
@@ -90,10 +133,6 @@ async function initialize(): Promise<void> {
 
 	navigator.serviceWorker?.addEventListener("message", (event: MessageEvent<WorkerMessage>) => {
 		const data = event.data;
-		if (data?.type === "ready-check") {
-			notifyWorker({ type: "runtime-ready" });
-			return;
-		}
 		if (data?.type !== "vfs-read") {
 			return;
 		}
@@ -107,10 +146,20 @@ async function initialize(): Promise<void> {
 	});
 	navigator.serviceWorker?.startMessages();
 
-	if (pageName() === "index.html") {
-		const config = readConfig();
-		setUpdatesDisabled(!!config.updateDisabled);
-		setTimeout(() => void checkForUpdates(false), 30_000);
+	notifyWorker({ type: "runtime-ready" });
+	const scripts = opened.scripts[`/${pageName()}`];
+	if (!scripts) {
+		throw new Error(`No bundled scripts for ${pageName()}`);
+	}
+	// Dependencies and the renderer load only after the virtual filesystem and IPC are ready.
+	for (const src of scripts) {
+		await new Promise<void>((resolve, reject) => {
+			const script = document.createElement("script");
+			script.src = src;
+			script.onload = () => resolve();
+			script.onerror = () => reject(new Error(`Unable to load ${src}`));
+			document.body.appendChild(script);
+		});
 	}
 }
 
@@ -123,4 +172,4 @@ if (pageName() === "index.html") {
 	enhanceStarter(window);
 }
 
-initialize().then(() => notifyWorker({ type: "runtime-ready" }), showFatalError);
+initialize().catch(showFatalError);
