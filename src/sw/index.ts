@@ -149,12 +149,18 @@ function waitForRuntime(clientId: string): Promise<void> {
 	if (readyClients.has(clientId)) {
 		return Promise.resolve();
 	}
-	return new Promise((resolve) => {
+	const promise = new Promise<void>((resolve) => {
 		const waiters = readyWaiters.get(clientId) ?? [];
 		waiters.push(resolve);
 		readyWaiters.set(clientId, waiters);
 		setTimeout(resolve, READY_TIMEOUT);
 	});
+	// The worker may have been restarted since the page reported that it is ready.
+	self.clients.get(clientId).then((client) => {
+		const message: WorkerMessage = { type: "ready-check" };
+		client?.postMessage(message);
+	});
+	return promise;
 }
 
 function rangeResponse(request: Request, blob: Blob, headers: Record<string, string>): Response {

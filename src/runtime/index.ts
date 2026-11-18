@@ -90,6 +90,10 @@ async function initialize(): Promise<void> {
 
 	navigator.serviceWorker?.addEventListener("message", (event: MessageEvent<WorkerMessage>) => {
 		const data = event.data;
+		if (data?.type === "ready-check") {
+			notifyWorker({ type: "runtime-ready" });
+			return;
+		}
 		if (data?.type !== "vfs-read") {
 			return;
 		}
@@ -101,6 +105,7 @@ async function initialize(): Promise<void> {
 			() => notifyWorker({ type: "vfs-read-result", id: data.id, data: null }),
 		);
 	});
+	navigator.serviceWorker?.startMessages();
 
 	if (pageName() === "index.html") {
 		const config = readConfig();

@@ -14,4 +14,4 @@ export type ClientMessage =
 	| { type: "app-updated" }
 	| { type: "vfs-read-result"; id: number; data: ArrayBuffer | null };
 
-export type WorkerMessage = { type: "vfs-read"; id: number; path: string };
+export type WorkerMessage = { type: "vfs-read"; id: number; path: string } | { type: "ready-check" };
