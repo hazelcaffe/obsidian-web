@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+	<title>Obsidian Web</title>
+	<defs>
+		<linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+			<stop offset="0" stop-color="#a88bfa"/>
+			<stop offset="1" stop-color="#6c31e3"/>
+		</linearGradient>
+	</defs>
+	<rect width="512" height="512" rx="112" fill="#1e1e1e"/>
+	<path d="M256 64 384 160 352 352 256 448 160 352 128 160Z" fill="url(#g)"/>
+	<path d="M256 64 256 448 160 352 128 160Z" fill="#ffffff" fill-opacity="0.18"/>
+	<path d="M128 160 384 160 256 64Z" fill="#ffffff" fill-opacity="0.12"/>
+</svg>

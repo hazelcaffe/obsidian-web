@@ -1,0 +1,52 @@
+const TYPES: Record<string, string> = {
+	html: "text/html; charset=utf-8",
+	htm: "text/html; charset=utf-8",
+	js: "text/javascript; charset=utf-8",
+	mjs: "text/javascript; charset=utf-8",
+	cjs: "text/javascript; charset=utf-8",
+	css: "text/css; charset=utf-8",
+	json: "application/json; charset=utf-8",
+	map: "application/json; charset=utf-8",
+	txt: "text/plain; charset=utf-8",
+	md: "text/markdown; charset=utf-8",
+	canvas: "application/json; charset=utf-8",
+	base: "text/yaml; charset=utf-8",
+	xml: "application/xml",
+	wasm: "application/wasm",
+	png: "image/png",
+	jpg: "image/jpeg",
+	jpeg: "image/jpeg",
+	gif: "image/gif",
+	webp: "image/webp",
+	avif: "image/avif",
+	bmp: "image/bmp",
+	ico: "image/x-icon",
+	svg: "image/svg+xml",
+	woff: "font/woff",
+	woff2: "font/woff2",
+	ttf: "font/ttf",
+	otf: "font/otf",
+	pdf: "application/pdf",
+	mp3: "audio/mpeg",
+	wav: "audio/wav",
+	m4a: "audio/mp4",
+	flac: "audio/flac",
+	ogg: "audio/ogg",
+	oga: "audio/ogg",
+	opus: "audio/ogg",
+	"3gp": "video/3gpp",
+	mp4: "video/mp4",
+	webm: "video/webm",
+	ogv: "video/ogg",
+	mov: "video/quicktime",
+	mkv: "video/x-matroska",
+	bcmap: "application/octet-stream",
+	pfb: "application/octet-stream",
+};
+
+export function mimeType(path: string): string {
+	const name = path.slice(path.lastIndexOf("/") + 1);
+	const dot = name.lastIndexOf(".");
+	const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
+	return TYPES[ext] ?? "application/octet-stream";
+}
