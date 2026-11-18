@@ -52,6 +52,7 @@ export interface LegacyUrl {
 }
 
 const PROTOCOL_PATTERN = /^([a-z][a-z0-9.+-]*:)?(\/\/)?/i;
+const SLASHED_PROTOCOLS = new Set(["http:", "https:", "ftp:", "gopher:", "file:", "ws:", "wss:"]);
 
 export function parse(input: string, parseQueryString = false, slashesDenoteHost = false): LegacyUrl {
 	const result: LegacyUrl = {
@@ -90,8 +91,12 @@ export function parse(input: string, parseQueryString = false, slashesDenoteHost
 		result.protocol = protocol;
 	}
 	rest = rest.slice(match?.[0].length ?? 0);
-	if (slashes && (protocol || slashesDenoteHost)) {
-		result.slashes = true;
+	const hostless = protocol === "javascript:";
+	const slashedProtocol = !!protocol && SLASHED_PROTOCOLS.has(protocol);
+	if (!hostless && ((slashes && (protocol || slashesDenoteHost)) || (protocol && !slashedProtocol))) {
+		if (slashes) {
+			result.slashes = true;
+		}
 		const end = rest.search(/[/]/);
 		let authority = end >= 0 ? rest.slice(0, end) : rest;
 		rest = end >= 0 ? rest.slice(end) : "";
@@ -108,7 +113,7 @@ export function parse(input: string, parseQueryString = false, slashesDenoteHost
 		} else {
 			result.hostname = authority.toLowerCase();
 		}
-		if (!rest && (protocol === "http:" || protocol === "https:" || protocol === "ftp:" || protocol === "file:")) {
+		if (!rest && slashedProtocol) {
 			rest = "/";
 		}
 	} else if (slashes) {
@@ -149,7 +154,8 @@ export function format(input: string | URL | Partial<LegacyUrl>): string {
 		search = encoded ? `?${encoded}` : "";
 	}
 	let hash = input.hash ?? "";
-	if (input.slashes || ["http:", "https:", "ftp:", "gopher:", "file:", "ws:", "wss:"].includes(protocol) || host) {
+	// Only slashed protocols get "//", unless the URL had them to begin with.
+	if ((input.slashes || SLASHED_PROTOCOLS.has(protocol)) && (input.slashes || host)) {
 		host = `//${host}`;
 		if (pathname && !pathname.startsWith("/")) {
 			pathname = `/${pathname}`;

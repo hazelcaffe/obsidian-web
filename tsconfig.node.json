@@ -2,11 +2,11 @@
 	"$schema": "https://json.schemastore.org/tsconfig",
 	"extends": "./tsconfig.json",
 	"compilerOptions": {
-		"lib": ["es2024"],
+		"lib": ["es2024", "dom", "dom.iterable"],
 		"module": "nodenext",
 		"moduleResolution": "nodenext",
 		"types": ["node"]
 	},
-	"include": ["src/server/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"],
+	"include": ["src/server/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "src/types/browserify.d.ts"],
 	"exclude": []
 }
