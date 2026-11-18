@@ -190,7 +190,9 @@ try {
 server.listen(port, host, () => {
 	const scheme = args.cert ? "https" : "http";
 	const shown = host === "0.0.0.0" || host === "::" ? "localhost" : host.includes(":") ? `[${host}]` : host;
-	console.log(`Obsidian Web is running at ${scheme}://${shown}:${port}/`);
+	const address = server.address();
+	const actualPort = typeof address === "object" && address ? address.port : port;
+	console.log(`Obsidian Web is running at ${scheme}://${shown}:${actualPort}/`);
 	if (!args.cert && !loopback) {
 		console.warn("Warning: browsers only allow Obsidian Web over HTTPS or on localhost. Use --cert/--key.");
 	}

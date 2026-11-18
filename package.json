@@ -20,7 +20,8 @@
 		"typecheck": "tsc -p tsconfig.json && tsc -p src/sw/tsconfig.json && tsc -p tsconfig.node.json",
 		"test": "node --test \"test/**/*.test.ts\"",
 		"lint": "biome check .",
-		"fix": "biome check --write ."
+		"fix": "biome check --write .",
+		"test:e2e": "node --test \"test/e2e/*.e2e.ts\""
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.6.8",
