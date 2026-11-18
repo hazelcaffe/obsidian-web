@@ -1,0 +1,103 @@
+import { createHash } from "node:crypto";
+import { copyFile, cp, mkdir, readdir, readFile, rm } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { type BuildOptions, build, context } from "esbuild";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const out = join(root, "dist/public");
+const assets = join(out, "obsidian-web");
+const watch = process.argv.includes("--watch");
+const production = !watch && !process.argv.includes("--dev");
+
+const PRECACHE = [
+	"/",
+	"/obsidian-web/boot.js",
+	"/obsidian-web/boot.css",
+	"/obsidian-web/runtime.js",
+	"/obsidian-web/icon.svg",
+	"/obsidian-web/manifest.webmanifest",
+	"/obsidian-web/vendor/libcurl.mjs",
+	"/obsidian-web/vendor/libcurl.wasm",
+];
+
+const common: BuildOptions = {
+	bundle: true,
+	format: "iife",
+	platform: "browser",
+	target: ["chrome120", "firefox128", "safari17"],
+	sourcemap: "linked",
+	minify: production,
+	legalComments: "linked",
+	logLevel: "info",
+	external: ["/obsidian-web/*"],
+	alias: { stream: "readable-stream", path: "path-browserify", querystring: "querystring-es3", zlib: "browserify-zlib" },
+	define: { "process.env.NODE_DEBUG": "false" },
+};
+
+async function copyStatic(): Promise<void> {
+	await mkdir(join(assets, "vendor"), { recursive: true });
+	for (const entry of await readdir(join(root, "public"))) {
+		const target = entry === "index.html" ? join(out, entry) : join(assets, entry);
+		await cp(join(root, "public", entry), target, { recursive: true });
+	}
+	const libcurl = join(root, "node_modules/libcurl.js");
+	for (const file of ["libcurl.mjs", "libcurl.wasm", "LICENSE"]) {
+		await copyFile(join(libcurl, file), join(assets, "vendor", file === "LICENSE" ? "libcurl.LICENSE" : file));
+	}
+}
+
+async function buildId(): Promise<string> {
+	const hash = createHash("sha256");
+	for (const file of ["runtime.js", "boot.js", "boot.css"]) {
+		hash.update(await readFile(join(assets, file)));
+	}
+	return hash.digest("hex").slice(0, 16);
+}
+
+async function buildServiceWorker(): Promise<void> {
+	await build({
+		...common,
+		entryPoints: [join(root, "src/sw/index.ts")],
+		outfile: join(out, "sw.js"),
+		define: {
+			...common.define,
+			__BUILD_ID__: JSON.stringify(await buildId()),
+			__PRECACHE__: JSON.stringify(PRECACHE),
+		},
+	});
+}
+
+const pages: BuildOptions = {
+	...common,
+	entryPoints: {
+		runtime: join(root, "src/runtime/index.ts"),
+		boot: join(root, "src/boot/index.ts"),
+	},
+	outdir: assets,
+};
+
+await rm(out, { recursive: true, force: true });
+await copyStatic();
+
+if (watch) {
+	const ctx = await context({
+		...pages,
+		plugins: [
+			{
+				name: "service-worker",
+				setup(builder) {
+					builder.onEnd(async (result) => {
+						if (result.errors.length === 0) {
+							await buildServiceWorker();
+						}
+					});
+				},
+			},
+		],
+	});
+	await ctx.watch();
+} else {
+	await build(pages);
+	await buildServiceWorker();
+}
