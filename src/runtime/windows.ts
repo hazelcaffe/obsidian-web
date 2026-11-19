@@ -90,8 +90,10 @@ function patchOpen(win: AppWindow): void {
 		nativeClose();
 		setTimeout(() => {
 			if (!win.closed && !isNavigating(win) && pageName(win) === "index.html") {
-				win.location.assign("/starter.html");
+				win.location.assign(appUrl("starter.html"));
 			}
 		}, 100);
 	};
 }
+
+import { appUrl } from "../shared/paths.ts";

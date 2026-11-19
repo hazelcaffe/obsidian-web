@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { join, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
@@ -14,6 +14,9 @@ const { values } = parseArgs({
 	},
 });
 const root = resolve(import.meta.dirname, "../../dist");
+const { basePath = "/" } = JSON.parse(await readFile(join(root, "obsidian-web/app.json"), "utf8")) as {
+	basePath?: string;
+};
 
 async function serve(request: IncomingMessage, response: ServerResponse): Promise<void> {
 	if (request.method !== "GET" && request.method !== "HEAD") {
@@ -27,7 +30,12 @@ async function serve(request: IncomingMessage, response: ServerResponse): Promis
 		response.writeHead(400).end();
 		return;
 	}
-	const path = join(root, pathname === "/" ? "index.html" : pathname);
+	if (!pathname.startsWith(basePath)) {
+		response.writeHead(302, { Location: basePath }).end();
+		return;
+	}
+	const relative = pathname.slice(basePath.length);
+	const path = join(root, relative || "index.html");
 	if (!path.startsWith(root + sep)) {
 		response.writeHead(403).end();
 		return;
@@ -63,6 +71,8 @@ await stat(join(root, "index.html")).catch(() => {
 logging.set_level(logging.WARN);
 wisp.options.parse_real_ip = false;
 wisp.options.allow_udp_streams = false;
+wisp.options.allow_private_ips = process.env.WISP_ALLOW_PRIVATE === "1";
+wisp.options.allow_loopback_ips = process.env.WISP_ALLOW_PRIVATE === "1";
 const server = createServer((request, response) => {
 	void serve(request, response).catch(() => response.destroy());
 });
@@ -80,5 +90,5 @@ server.on("upgrade", (request, socket, head) => {
 server.listen(Number(values.port), values.host, () => {
 	const address = server.address();
 	const port = typeof address === "object" && address ? address.port : values.port;
-	console.log(`Obsidian Web is running at http://localhost:${port}/`);
+	console.log(`Obsidian Web is running at http://localhost:${port}${basePath}`);
 });

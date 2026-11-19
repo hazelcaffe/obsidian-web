@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { AsarArchive, extractTerms } from "../src/shared/asar.ts";
 import { BUNDLE_MARKER, type BundleInfo } from "../src/shared/bundle.ts";
-import { APP_PAGES, ASSET_PREFIX } from "../src/shared/constants.ts";
+import { APP_PAGES } from "../src/shared/constants.ts";
+import { normalizeBasePath } from "../src/shared/paths.ts";
 
 // Pin the tested release for reproducible builds. Override with OBSIDIAN_VERSION or OBSIDIAN_ASAR.
 const VERSION = "1.15.1";
@@ -29,7 +30,8 @@ async function cachedDownload(cache: string, name: string, url: string): Promise
 }
 
 /** Extract the app and replace its script scheduling with the OPFS-aware runtime startup. */
-export async function bundleObsidian(root: string, out: string): Promise<string[]> {
+export async function bundleObsidian(root: string, out: string, basePath = "/"): Promise<string[]> {
+	const base = normalizeBasePath(basePath);
 	const cache = join(root, ".cache");
 	await mkdir(cache, { recursive: true });
 	const version = process.env.OBSIDIAN_VERSION ?? VERSION;
@@ -58,7 +60,7 @@ export async function bundleObsidian(root: string, out: string): Promise<string[
 	if (!terms || !pkg.version) {
 		throw new Error("Not an Obsidian desktop bundle");
 	}
-	const info: BundleInfo = { version: pkg.version, terms, scripts: {}, sandbox: [] };
+	const info: BundleInfo = { version: pkg.version, basePath: base, terms, scripts: {}, sandbox: [] };
 	const paths: string[] = [];
 	for (const path of archive.walk()) {
 		if (path.split("/").some((part) => part === ".." || part === ".DS_Store" || part.includes("\\"))) {
@@ -67,9 +69,12 @@ export async function bundleObsidian(root: string, out: string): Promise<string[
 		const url = `/${path}`;
 		let data: Buffer | string = read(path);
 		if (Object.hasOwn(APP_PAGES, url)) {
-			const page = preparePage(data.toString(), APP_PAGES[url] as string);
+			const page = preparePage(data.toString(), APP_PAGES[url] as string, base);
 			data = page.html;
 			info.scripts[url] = page.scripts;
+		} else if (base !== "/" && path.endsWith(".js")) {
+			// Obsidian assumes its asset URLs and navigation routes are at the origin root.
+			data = rebaseAssetLiterals(data.toString(), base, (candidate) => archive.getEntry(candidate) !== null);
 		}
 		if (path.startsWith("sandbox/")) {
 			info.sandbox.push(path);
@@ -77,7 +82,7 @@ export async function bundleObsidian(root: string, out: string): Promise<string[
 		const target = join(out, path);
 		await mkdir(join(target, ".."), { recursive: true });
 		await writeFile(target, data);
-		paths.push(url);
+		paths.push(`${base}${path}`);
 	}
 	await mkdir(join(out, "obsidian-web"), { recursive: true });
 	await writeFile(join(out, "obsidian-web/app.json"), JSON.stringify(info));
@@ -86,7 +91,14 @@ export async function bundleObsidian(root: string, out: string): Promise<string[
 	return paths;
 }
 
-export function preparePage(html: string, entry: string): { html: string; scripts: string[] } {
+export function rebaseAssetLiterals(code: string, base: string, exists: (path: string) => boolean): string {
+	return code.replace(/(["'])(\/(?!\/)[^"'\n\\]*)\1/g, (original, quote: string, path: string) => {
+		const candidate = path.slice(1).split(/[?#]/)[0] ?? "";
+		return candidate && exists(candidate) ? `${quote}${base}${path.slice(1)}${quote}` : original;
+	});
+}
+
+export function preparePage(html: string, entry: string, base = "/"): { html: string; scripts: string[] } {
 	const scripts: string[] = [];
 	const page = html
 		.replace(/<script\b([^>]*)>[\s\S]*?<\/script>/gi, (_tag, attributes: string) => {
@@ -101,8 +113,11 @@ export function preparePage(html: string, entry: string): { html: string; script
 		scripts.push(entry);
 	}
 	const additions = `<meta name="${BUNDLE_MARKER}" content="true"/>
-<link rel="icon" href="/favicon.ico"/>
-<link rel="manifest" href="${ASSET_PREFIX}manifest.webmanifest"/>
-<script defer src="${ASSET_PREFIX}runtime.js"></script>`;
-	return { html: page.replace(/<\/head>/i, `${additions}\n</head>`), scripts };
+<link rel="icon" href="${base}favicon.ico"/>
+<link rel="manifest" href="${base}obsidian-web/manifest.webmanifest"/>
+<script defer src="${base}obsidian-web/runtime.js"></script>`;
+	return {
+		html: page.replace(/<\/head>/i, `${additions}\n</head>`),
+		scripts: scripts.map((script) => `${base}${script.slice(1)}`),
+	};
 }

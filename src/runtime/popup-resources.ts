@@ -57,7 +57,7 @@ function cached(key: string, href: string, load: () => Promise<string>): Promise
 		promise = load();
 		promise.catch(() => cache.delete(key));
 		// Vault files change, so only app files stay cached.
-		if (!new URL(href).pathname.startsWith("/_vfs/")) {
+		if (!new URL(href).pathname.startsWith(VFS_URL_PREFIX)) {
 			cache.set(key, promise);
 		}
 	}
@@ -191,3 +191,5 @@ export function proxyPopupResources(popup: Window): void {
 	});
 	visit(doc.documentElement);
 }
+
+import { VFS_URL_PREFIX } from "../shared/constants.ts";

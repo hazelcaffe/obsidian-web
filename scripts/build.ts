@@ -3,6 +3,7 @@ import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/p
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type BuildOptions, build, context } from "esbuild";
+import { normalizeBasePath } from "../src/shared/paths.ts";
 import { bundleObsidian } from "./obsidian.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -10,6 +11,7 @@ const out = join(root, "dist");
 const assets = join(out, "obsidian-web");
 const watch = process.argv.includes("--watch");
 const production = !watch && !process.argv.includes("--dev");
+const base = normalizeBasePath(process.env.BASE_PATH ?? "/");
 
 const PRECACHE = [
 	"/",
@@ -19,7 +21,7 @@ const PRECACHE = [
 	"/obsidian-web/manifest.webmanifest",
 	"/obsidian-web/vendor/libcurl.mjs",
 	"/obsidian-web/vendor/libcurl.wasm",
-];
+].map((path) => `${base}${path.slice(1)}`);
 
 const common: BuildOptions = {
 	bundle: true,
@@ -37,7 +39,7 @@ const common: BuildOptions = {
 		querystring: "querystring-es3",
 		zlib: "browserify-zlib",
 	},
-	define: { "process.env.NODE_DEBUG": "false" },
+	define: { "process.env.NODE_DEBUG": "false", __BASE_PATH__: JSON.stringify(base) },
 };
 
 async function copyStatic(): Promise<void> {
@@ -46,6 +48,13 @@ async function copyStatic(): Promise<void> {
 		const target = entry === "index.html" ? join(out, entry) : join(assets, entry);
 		await cp(join(root, "public", entry), target, { recursive: true });
 	}
+	const manifestPath = join(assets, "manifest.webmanifest");
+	const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+	manifest.start_url = base;
+	manifest.scope = base;
+	manifest.icons = [{ src: `${base}favicon.ico`, sizes: "any", type: "image/x-icon" }];
+	await writeFile(manifestPath, JSON.stringify(manifest));
+	await writeFile(join(out, ".nojekyll"), "");
 	const libcurl = join(root, "node_modules/libcurl.js");
 	await copyFile(join(libcurl, "libcurl.wasm"), join(assets, "vendor/libcurl.wasm"));
 	await copyFile(join(libcurl, "LICENSE"), join(assets, "vendor/libcurl.LICENSE"));
@@ -56,6 +65,20 @@ async function copyStatic(): Promise<void> {
 		throw new Error("Unable to patch the environment detection of libcurl.js");
 	}
 	await writeFile(join(assets, "vendor/libcurl.mjs"), source.replace(detection, "var ENVIRONMENT_IS_NODE=false;"));
+	for (const [pkg, folder, files] of [
+		["scramjet", "scramjet", ["scramjet.all.js", "scramjet.sync.js", "scramjet.wasm.wasm"]],
+		["bare-mux", "bare-mux", ["worker.js"]],
+		["libcurl-transport", "curl-transport", ["index.mjs"]],
+	] as const) {
+		const packagePath = join(root, "node_modules/@mercuryworkshop", pkg);
+		const destination = join(assets, "vendor", folder);
+		await mkdir(destination, { recursive: true });
+		for (const file of files) {
+			await copyFile(join(packagePath, "dist", file), join(destination, file));
+			PRECACHE.push(`${base}obsidian-web/vendor/${folder}/${file}`);
+		}
+		await copyFile(join(packagePath, "LICENSE"), join(destination, "LICENSE"));
+	}
 }
 
 async function buildId(): Promise<string> {
@@ -89,7 +112,7 @@ const pages: BuildOptions = {
 
 await rm(out, { recursive: true, force: true });
 await copyStatic();
-PRECACHE.push(...(await bundleObsidian(root, out)));
+PRECACHE.push(...(await bundleObsidian(root, out, base)));
 
 if (watch) {
 	const ctx = await context({

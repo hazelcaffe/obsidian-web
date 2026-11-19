@@ -1,5 +1,6 @@
 import { BUNDLE_INFO_URL, BUNDLE_MARKER, type BundleInfo } from "../shared/bundle.ts";
 import type { ClientMessage, WorkerMessage } from "../shared/constants.ts";
+import { appUrl, BASE_PATH } from "../shared/paths.ts";
 import { getOpfsRoot, OPFS_VFS_DIR, VFS_META_FILE } from "../shared/storage.ts";
 import { LAST_VAULT_KEY } from "../shared/storage-keys.ts";
 import { createFs } from "../vfs/index.ts";
@@ -60,7 +61,10 @@ async function ensureServiceWorker(): Promise<boolean> {
 	if (!navigator.serviceWorker || !navigator.storage?.getDirectory) {
 		throw new Error("This browser needs OPFS and service workers. Open the site on localhost or over HTTPS.");
 	}
-	const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" });
+	const registration = await navigator.serviceWorker.register(appUrl("sw.js"), {
+		scope: BASE_PATH,
+		updateViaCache: "none",
+	});
 	const legacyPage = !document.querySelector(`meta[name="${BUNDLE_MARKER}"]`);
 	if (legacyPage) {
 		await registration.update();
@@ -107,7 +111,7 @@ async function initialize(): Promise<void> {
 	if (pageName() === "index.html" && !currentVaultId()) {
 		const last = localStorage.getItem(LAST_VAULT_KEY);
 		const path = await readVaultPath(vfsRoot, last);
-		location.replace(path && last ? `/index.html?vault=${encodeURIComponent(last)}` : "/starter.html");
+		location.replace(appUrl(path && last ? `index.html?vault=${encodeURIComponent(last)}` : "starter.html"));
 		return;
 	}
 	const vaultPath = await readVaultPath(vfsRoot, currentVaultId());

@@ -1,5 +1,6 @@
 import pathModule from "path-browserify";
 import { VFS_URL_PREFIX } from "../../shared/constants.ts";
+import { appUrl } from "../../shared/paths.ts";
 import { LAST_VAULT_KEY } from "../../shared/storage-keys.ts";
 import { DEFAULT_POLICY, getOpenedApp } from "../app-info.ts";
 import {
@@ -124,7 +125,7 @@ function openTab(win: Window, url: string, name: string): void {
 }
 
 function vaultUrl(id: string): string {
-	return `/index.html?vault=${encodeURIComponent(id)}`;
+	return appUrl(`index.html?vault=${encodeURIComponent(id)}`);
 }
 
 function isAppStarted(win: Window): boolean {
@@ -168,9 +169,9 @@ export function openVault(path: string, sender: Window): true | string {
 export function openStarter(sender: Window): void {
 	const win = rootWindow(sender);
 	if (isAppStarted(win)) {
-		openTab(win, "/starter.html", "obsidian-starter");
+		openTab(win, appUrl("starter.html"), "obsidian-starter");
 	} else {
-		navigate(win, "/starter.html");
+		navigate(win, appUrl("starter.html"));
 	}
 }
 
@@ -343,7 +344,7 @@ async function openSandbox(sender: Window): Promise<void> {
 	for (const relative of sandbox) {
 		const destination = `${SANDBOX_VAULT}/${relative.slice("sandbox/".length)}`;
 		await fs.promises.mkdir(pathModule.dirname(destination), { recursive: true });
-		const response = await fetch(`/${relative.split("/").map(encodeURIComponent).join("/")}`);
+		const response = await fetch(appUrl(relative.split("/").map(encodeURIComponent).join("/")));
 		if (!response.ok) {
 			throw new Error(`Unable to load ${relative}`);
 		}
@@ -564,7 +565,7 @@ export function registerMainHandlers(): void {
 	});
 	on("help", (event) => {
 		set(event, null);
-		senderWindow(event).open("/help.html", "obsidian-help", "popup,width=600,height=680");
+		senderWindow(event).open(appUrl("help.html"), "obsidian-help", "popup,width=600,height=680");
 	});
 	on("sandbox", (event) => {
 		set(event, null);
@@ -705,7 +706,7 @@ export function registerMainHandlers(): void {
 }
 
 export function applyIcon(win: Window): void {
-	let url = "/favicon.ico";
+	let url = appUrl("favicon.ico");
 	try {
 		url = (JSON.parse(win.localStorage.getItem(ICON_KEY) ?? "null") as { url?: string } | null)?.url ?? url;
 	} catch {}

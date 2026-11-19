@@ -1,4 +1,6 @@
+import type { ScramjetFrame } from "@mercuryworkshop/scramjet";
 import { EventEmitter } from "events";
+import { createProxyFrame, proxyResourceUrl } from "../net/web-proxy.ts";
 import { registerWebContents } from "./browser-window.ts";
 
 const TAG = "obsidian-webview";
@@ -8,10 +10,7 @@ function webviewEvent(type: string, detail: Record<string, unknown> = {}): Event
 	return Object.assign(new Event(type), detail);
 }
 
-/**
- * Electron's `<webview>` tag on top of an `<iframe>`. Cross-origin pages cannot be inspected, so navigation inside the
- * frame is not observable and pages that forbid framing will not load.
- */
+/** Electron's webview backed by a Scramjet-rewritten page over Wisp. */
 function defineWebview(win: Window & typeof globalThis): void {
 	if (win.customElements.get(TAG)) {
 		return;
@@ -24,6 +23,11 @@ function defineWebview(win: Window & typeof globalThis): void {
 		#index = -1;
 		#loading = false;
 		#zoom = 1;
+		#proxy: ScramjetFrame | null = null;
+		#proxyReady: Promise<void> | null = null;
+		#url = "";
+		#navigation = 0;
+		#titleObserver: MutationObserver | null = null;
 		allowpopups = false;
 		partition = "";
 		useragent = "";
@@ -91,15 +95,67 @@ function defineWebview(win: Window & typeof globalThis): void {
 				this.#index = this.#history.length - 1;
 			}
 			this.#loading = true;
+			this.#url = url;
+			const navigation = ++this.#navigation;
 			this.dispatchEvent(webviewEvent("did-start-loading"));
 			this.dispatchEvent(webviewEvent("did-start-navigation", { url, isMainFrame: true, isInPlace: false }));
-			if (this.#frame.src !== url) {
+			if (url === "about:blank") {
 				this.#frame.src = url;
+				return;
 			}
+			this.#ensureProxy()
+				.then(() => {
+					if (navigation === this.#navigation) {
+						this.#proxy?.go(url);
+					}
+				})
+				.catch((error: unknown) => {
+					if (navigation !== this.#navigation) {
+						return;
+					}
+					this.#loading = false;
+					this.dispatchEvent(
+						webviewEvent("did-fail-load", {
+							errorCode: -2,
+							errorDescription: error instanceof Error ? error.message : String(error),
+							validatedURL: url,
+							isMainFrame: true,
+						}),
+					);
+					this.dispatchEvent(webviewEvent("did-stop-loading"));
+				});
+		}
+
+		#ensureProxy(): Promise<void> {
+			this.#proxyReady ??= createProxyFrame(this.#frame)
+				.then((frame) => {
+					this.#proxy = frame;
+					frame.addEventListener("navigate", (event) => {
+						this.#loading = true;
+						this.dispatchEvent(webviewEvent("did-start-loading"));
+						this.dispatchEvent(webviewEvent("did-start-navigation", { url: event.url, isMainFrame: true }));
+					});
+					frame.addEventListener("urlchange", (event) => {
+						if (event.url !== this.#url) {
+							this.#history.splice(this.#index + 1);
+							this.#history.push(event.url);
+							this.#index = this.#history.length - 1;
+							this.#url = event.url;
+							this.dispatchEvent(
+								webviewEvent("did-navigate-in-page", { url: event.url, isMainFrame: true }),
+							);
+						}
+					});
+				})
+				.catch((error: unknown) => {
+					this.#proxyReady = null;
+					throw error;
+				});
+			return this.#proxyReady;
 		}
 
 		#onLoad(): void {
-			if (!this.#frame.src) {
+			if (!this.#frame.src || this.#frame.src === "about:blank") {
 				return;
 			}
 			this.#loading = false;
@@ -108,9 +164,23 @@ function defineWebview(win: Window & typeof globalThis): void {
 			this.dispatchEvent(webviewEvent("did-finish-load"));
 			this.dispatchEvent(webviewEvent("did-stop-loading"));
 			this.dispatchEvent(webviewEvent("page-title-updated", { title: this.getTitle(), explicitSet: false }));
+			this.#titleObserver?.disconnect();
+			const head = this.#frame.contentDocument?.head;
+			if (head) {
+				this.#titleObserver = new win.MutationObserver(() => {
+					this.dispatchEvent(
+						webviewEvent("page-title-updated", { title: this.getTitle(), explicitSet: true }),
+					);
+				});
+				this.#titleObserver.observe(head, { subtree: true, childList: true, characterData: true });
+			}
 			try {
 				const origin = new URL(url).origin;
-				this.dispatchEvent(webviewEvent("page-favicon-updated", { favicons: [`${origin}/favicon.ico`] }));
+				void proxyResourceUrl(`${origin}/favicon.ico`).then((icon) => {
+					if (this.#url === url) {
+						this.dispatchEvent(webviewEvent("page-favicon-updated", { favicons: [icon] }));
+					}
+				});
 			} catch {}
 		}
 
@@ -120,11 +190,7 @@ function defineWebview(win: Window & typeof globalThis): void {
 		}
 
 		getURL(): string {
-			try {
-				return this.#frame.contentWindow?.location.href ?? this.src;
-			} catch {
-				return this.#history[this.#index] ?? this.src;
-			}
+			return this.#url || this.src;
 		}
 
 		getTitle(): string {
@@ -150,6 +216,7 @@ function defineWebview(win: Window & typeof globalThis): void {
 		}
 
 		stop(): void {
+			this.#navigation++;
 			this.#loading = false;
 			this.#frame.contentWindow?.stop();
 			this.dispatchEvent(webviewEvent("did-stop-loading"));
@@ -158,7 +225,6 @@ function defineWebview(win: Window & typeof globalThis): void {
 		reload(): void {
 			const url = this.#history[this.#index];
 			if (url) {
-				this.#frame.src = "about:blank";
 				this.#navigate(url, false);
 			}
 		}
@@ -201,7 +267,10 @@ function defineWebview(win: Window & typeof globalThis): void {
 			if (!target) {
 				throw new Error("The page is not loaded");
 			}
-			return target.eval(code);
+			// Evaluate inside Scramjet's virtual window so URL and network APIs use the viewed site's origin.
+			const rewrite = (target as typeof target & { $scramjet$rewrite?: (code: string) => string })
+				.$scramjet$rewrite;
+			return target.eval(rewrite ? rewrite(code) : code);
 		}
 
 		async insertCSS(css: string): Promise<string> {

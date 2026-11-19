@@ -1,3 +1,4 @@
 allowBuilds:
+    "@mercuryworkshop/scramjet": false
     bufferutil: false
     esbuild: true

@@ -7,7 +7,7 @@ export function defaultWispUrl(origin: string = location.origin): string {
 		url.hostname.endsWith(".localhost") ||
 		url.hostname === "[::1]" ||
 		/^127\.\d+\.\d+\.\d+$/.test(url.hostname);
-	return local ? `${url.protocol === "https:" ? "wss:" : "ws:"}//${url.host}/wisp/` : "";
+	return local ? `${url.protocol === "https:" ? "wss:" : "ws:"}//${url.host}/wisp/` : "wss://anura.pro/";
 }
 
 export function getWispUrl(): string {

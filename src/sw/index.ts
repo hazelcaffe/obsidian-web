@@ -1,17 +1,30 @@
-import { type ClientMessage, VFS_URL_PREFIX, type WorkerMessage } from "../shared/constants.ts";
+import type { ScramjetServiceWorker } from "@mercuryworkshop/scramjet";
+import {
+	ASSET_PREFIX,
+	type ClientMessage,
+	VFS_URL_PREFIX,
+	WEBVIEW_PREFIX,
+	type WorkerMessage,
+} from "../shared/constants.ts";
 import { mimeType } from "../shared/mime.ts";
+import { BASE_PATH } from "../shared/paths.ts";
 import { getOpfsRoot, OPFS_VFS_DIR } from "../shared/storage.ts";
 
 declare const self: ServiceWorkerGlobalScope;
 declare const __BUILD_ID__: string;
 declare const __PRECACHE__: string[];
 
-const CACHE_NAME = `obsidian-web-${__BUILD_ID__}`;
+const CACHE_PREFIX = `obsidian-web-${encodeURIComponent(BASE_PATH)}-`;
+const CACHE_NAME = `${CACHE_PREFIX}${__BUILD_ID__}`;
 const CLIENT_READ_TIMEOUT = 5_000;
 
 const readyClients = new Set<string>();
 const pendingReads = new Map<number, (data: ArrayBuffer | null) => void>();
 let nextReadId = 1;
+
+// Load code at startup, but instantiate after the controller has initialized Scramjet's database schema.
+importScripts(`${ASSET_PREFIX}vendor/scramjet/scramjet.all.js`);
+let proxy: ScramjetServiceWorker | null = null;
 
 self.addEventListener("install", (event) => {
 	event.waitUntil(
@@ -27,7 +40,7 @@ self.addEventListener("activate", (event) => {
 	event.waitUntil(
 		(async () => {
 			for (const key of await caches.keys()) {
-				if (key.startsWith("obsidian-web-") && key !== CACHE_NAME) {
+				if (key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME) {
 					await caches.delete(key);
 				}
 			}
@@ -50,11 +63,24 @@ self.addEventListener("message", (event) => {
 self.addEventListener("fetch", (event) => {
 	const request = event.request;
 	const url = new URL(request.url);
-	if (url.origin !== self.location.origin || (request.method !== "GET" && request.method !== "HEAD")) {
+	if (url.origin !== self.location.origin || !url.pathname.startsWith(BASE_PATH)) {
 		return;
 	}
 	const path = url.pathname;
-	if (path.startsWith(VFS_URL_PREFIX)) {
+	if (
+		path.startsWith(WEBVIEW_PREFIX) ||
+		(path === `${ASSET_PREFIX}vendor/scramjet/scramjet.wasm.wasm` && request.destination === "script")
+	) {
+		event.respondWith(
+			(async () => {
+				proxy ??= new ($scramjetLoadWorker().ScramjetServiceWorker)();
+				await proxy.loadConfig();
+				return proxy.fetch(event);
+			})(),
+		);
+	} else if (request.method !== "GET" && request.method !== "HEAD") {
+		return;
+	} else if (path.startsWith(VFS_URL_PREFIX)) {
 		event.respondWith(serveVfs(request, path, event.clientId));
 	} else {
 		event.respondWith(networkFirst(request));
