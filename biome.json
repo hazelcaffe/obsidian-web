@@ -69,5 +69,11 @@
 				"organizeImports": "on"
 			}
 		}
-	}
+	},
+	"overrides": [
+		{
+			"includes": ["README.md"],
+			"formatter": { "enabled": false }
+		}
+	]
 }

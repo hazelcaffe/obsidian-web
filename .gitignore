@@ -1,14 +1,6 @@
 node_modules/
 dist/
 .cache/
-*.tsbuildinfo
-.data/
-coverage/
-*.log
 .env
-.env.*
-!.env.example
-
-# Obsidian application files are fetched at setup time and must never be committed.
 *.asar
 *.asar.gz
