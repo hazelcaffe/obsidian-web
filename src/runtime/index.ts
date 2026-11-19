@@ -9,6 +9,7 @@ import { setOpenedApp } from "./app-info.ts";
 import { watchDownloads } from "./downloads.ts";
 import { applyIcon, registerMainHandlers, takePendingVaultMessage } from "./electron/main.ts";
 import { currentVaultId, DESKTOP, DOCUMENTS, DOWNLOADS, HOME, pageName, TEMP, USER_DATA } from "./env.ts";
+import { hideLoading, showLoading, watchDownload } from "./loading.ts";
 import { setAppVersion } from "./net/curl.ts";
 import { registerNodeModules } from "./node/index.ts";
 import { enhanceStarter } from "./starter.ts";
@@ -41,6 +42,7 @@ async function readVaultPath(root: FileSystemDirectoryHandle, id: string | null)
 
 function showFatalError(error: unknown): void {
 	console.error(error);
+	hideLoading();
 	const show = (): void => {
 		const box = document.createElement("div");
 		box.style.cssText =
@@ -71,15 +73,25 @@ async function ensureServiceWorker(): Promise<boolean> {
 	}
 	const installing = registration.installing ?? registration.waiting;
 	if (installing && installing.state !== "activated") {
-		await new Promise<void>((resolve, reject) => {
-			installing.addEventListener("statechange", () => {
-				if (installing.state === "activated") {
-					resolve();
-				} else if (installing.state === "redundant") {
-					reject(new Error("Service worker installation failed"));
-				}
+		const stopProgress = watchDownload(installing);
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const onStateChange = (): void => {
+					if (installing.state === "activated" || installing.state === "redundant") {
+						installing.removeEventListener("statechange", onStateChange);
+						if (installing.state === "activated") {
+							resolve();
+						} else {
+							reject(new Error("Service worker installation failed"));
+						}
+					}
+				};
+				installing.addEventListener("statechange", onStateChange);
+				onStateChange();
 			});
-		});
+		} finally {
+			stopProgress();
+		}
 	}
 	await navigator.serviceWorker.ready;
 	if (!navigator.serviceWorker.controller) {
@@ -98,6 +110,7 @@ async function initialize(): Promise<void> {
 	if (!(await ensureServiceWorker())) {
 		return;
 	}
+	showLoading("Opening Obsidian…");
 	const response = await fetch(BUNDLE_INFO_URL);
 	if (!response.ok) {
 		throw new Error("Missing bundled app metadata. Run pnpm build to regenerate dist/.");
@@ -115,6 +128,7 @@ async function initialize(): Promise<void> {
 		return;
 	}
 	const vaultPath = await readVaultPath(vfsRoot, currentVaultId());
+	showLoading("Opening local vault…");
 	const vfs = await createFs({
 		root: vfsRoot,
 		metaDir: opfs,
@@ -156,6 +170,7 @@ async function initialize(): Promise<void> {
 		throw new Error(`No bundled scripts for ${pageName()}`);
 	}
 	// Dependencies and the renderer load only after the virtual filesystem and IPC are ready.
+	showLoading("Loading Obsidian…");
 	for (const src of scripts) {
 		await new Promise<void>((resolve, reject) => {
 			const script = document.createElement("script");
@@ -165,6 +180,7 @@ async function initialize(): Promise<void> {
 			document.body.appendChild(script);
 		});
 	}
+	hideLoading();
 }
 
 registerNodeModules();

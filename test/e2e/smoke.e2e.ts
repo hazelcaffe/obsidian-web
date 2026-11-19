@@ -143,8 +143,26 @@ for (const mode of ["static", "wisp"] as const) {
 		});
 
 		it("opens the bundled app without a setup screen or external downloads", async () => {
-			await page.goto(`${origin}${base}`);
+			// Slow startup must provide feedback even before runtime.js can execute.
+			const runtimeDownload = Promise.withResolvers<void>();
+			await page.route("**/obsidian-web/runtime.js", async (route) => {
+				await runtimeDownload.promise;
+				await route.continue();
+			});
+			try {
+				await page.goto(`${origin}${base}`, { waitUntil: "commit" });
+				await page.locator("#obsidian-web-loading").waitFor({ state: "visible" });
+				assert.equal(
+					await page.locator("#obsidian-web-loading-status").textContent(),
+					"Downloading app files…",
+				);
+				assert.equal(await page.locator("#obsidian-web-loading img").getAttribute("src"), `${base}icon.png`);
+			} finally {
+				runtimeDownload.resolve();
+			}
 			await page.getByRole("button", { name: "Quick start", exact: true }).waitFor({ timeout: 30_000 });
+			await page.unroute("**/obsidian-web/runtime.js");
+			assert.equal(await page.locator("#obsidian-web-loading").count(), 0);
 			assert.equal(new URL(page.url()).pathname, `${base}starter.html`);
 			assert.equal(await page.locator(".boot, #content .card, input[type=checkbox]").count(), 0);
 			assert.equal(await page.locator('link[rel="icon"]').getAttribute("href"), `${base}favicon.ico`);

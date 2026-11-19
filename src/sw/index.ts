@@ -2,6 +2,7 @@ import type { ScramjetServiceWorker } from "@mercuryworkshop/scramjet";
 import {
 	ASSET_PREFIX,
 	type ClientMessage,
+	type StartupProgress,
 	VFS_URL_PREFIX,
 	WEBVIEW_PREFIX,
 	type WorkerMessage,
@@ -26,11 +27,44 @@ let nextReadId = 1;
 importScripts(`${ASSET_PREFIX}vendor/scramjet/scramjet.all.js`);
 let proxy: ScramjetServiceWorker | null = null;
 
+const startupProgress: StartupProgress = { completed: 0, total: __PRECACHE__.length };
+const progressPorts = new Set<MessagePort>();
+let precacheDone = false;
+
+async function precache(cache: Cache): Promise<void> {
+	let next = 0;
+	// Keep downloads bounded and report actual completed files rather than simulated percentages.
+	await Promise.all(
+		Array.from({ length: 8 }, async () => {
+			while (next < __PRECACHE__.length) {
+				const path = __PRECACHE__[next++];
+				if (!path) {
+					continue;
+				}
+				try {
+					await cache.add(path);
+					startupProgress.completed++;
+					for (const port of progressPorts) {
+						port.postMessage(startupProgress);
+					}
+				} catch (error) {
+					console.warn(`Unable to cache ${path}`, error);
+				}
+			}
+		}),
+	);
+	precacheDone = true;
+	for (const port of progressPorts) {
+		port.close();
+	}
+	progressPorts.clear();
+}
+
 self.addEventListener("install", (event) => {
 	event.waitUntil(
 		(async () => {
 			const cache = await caches.open(CACHE_NAME);
-			await cache.addAll(__PRECACHE__).catch((error: unknown) => console.warn("Precache failed", error));
+			await precache(cache);
 			await self.skipWaiting();
 		})(),
 	);
@@ -52,7 +86,17 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("message", (event) => {
 	const data = event.data as ClientMessage;
 	const source = event.source;
-	if (data.type === "runtime-ready" && source && "id" in source) {
+	if (data.type === "startup-progress") {
+		const port = event.ports[0];
+		if (port) {
+			port.postMessage(startupProgress);
+			if (precacheDone) {
+				port.close();
+			} else {
+				progressPorts.add(port);
+			}
+		}
+	} else if (data.type === "runtime-ready" && source && "id" in source) {
 		readyClients.add(source.id);
 	} else if (data.type === "vfs-read-result") {
 		pendingReads.get(data.id)?.(data.data);

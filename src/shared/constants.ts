@@ -12,7 +12,13 @@ export const APP_PAGES: Record<string, string> = {
 
 export type ClientMessage =
 	| { type: "runtime-ready" }
+	| { type: "startup-progress" }
 	| { type: "vfs-read-result"; id: number; data: ArrayBuffer | null };
+
+export interface StartupProgress {
+	completed: number;
+	total: number;
+}
 
 export type WorkerMessage = { type: "vfs-read"; id: number; path: string };
 

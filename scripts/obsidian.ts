@@ -5,6 +5,7 @@ import { AsarArchive, extractTerms } from "../src/shared/asar.ts";
 import { BUNDLE_MARKER, type BundleInfo } from "../src/shared/bundle.ts";
 import { APP_PAGES } from "../src/shared/constants.ts";
 import { normalizeBasePath } from "../src/shared/paths.ts";
+import { loadingScreen } from "./loading.ts";
 
 // Pin the tested release for reproducible builds. Override with OBSIDIAN_VERSION or OBSIDIAN_ASAR.
 const VERSION = "1.15.1";
@@ -116,8 +117,11 @@ export function preparePage(html: string, entry: string, base = "/"): { html: st
 <link rel="icon" href="${base}favicon.ico"/>
 <link rel="manifest" href="${base}obsidian-web/manifest.webmanifest"/>
 <script defer src="${base}obsidian-web/runtime.js"></script>`;
+	const loading = loadingScreen(base);
 	return {
-		html: page.replace(/<\/head>/i, `${additions}\n</head>`),
+		html: page
+			.replace(/<\/head>/i, `${loading.style}\n${additions}\n</head>`)
+			.replace(/<body\b[^>]*>/i, (body) => `${body}\n${loading.html}`),
 		scripts: scripts.map((script) => `${base}${script.slice(1)}`),
 	};
 }
